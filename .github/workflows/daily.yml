@@ -1,0 +1,91 @@
+name: Daily Smart Money Update
+
+on:
+  schedule:
+    # Daily at 04:17 UTC (12:17 Beijing). Off the top-of-hour stampede.
+    - cron: '17 4 * * *'
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: 'Limit wallets (blank = all)'
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: daily-update
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 330  # 5h 30m; leaves headroom under the 6h actions cap
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+
+      - name: Restore SQLite cache
+        id: cache-db
+        uses: actions/cache@v4
+        with:
+          path: ~/.smartmoney
+          key: smartmoney-db-${{ github.run_id }}
+          restore-keys: |
+            smartmoney-db-
+
+      - name: Init DB (if first run)
+        run: smartmoney init-db
+
+      - name: Run daily pipeline
+        env:
+          LIMIT: ${{ github.event.inputs.limit }}
+        run: |
+          if [ -n "$LIMIT" ]; then
+            smartmoney run-daily --limit "$LIMIT"
+          else
+            smartmoney run-daily
+          fi
+
+      - name: Export web JSON
+        run: smartmoney export-web
+
+      - name: Save SQLite cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.smartmoney
+          key: smartmoney-db-${{ github.run_id }}
+
+      - name: Commit updated leaderboard
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/leaderboard.json
+          if git diff --cached --quiet; then
+            echo "no changes"
+            exit 0
+          fi
+          git commit -m "data: leaderboard $(date -u +%Y-%m-%d)"
+          git push
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs
+
+      - name: Deploy to GitHub Pages
+        uses: actions/deploy-pages@v4

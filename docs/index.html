@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Polymarket Smart Money 排行榜</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --panel: #161b22;
+    --panel-2: #1c2129;
+    --border: #30363d;
+    --text: #e6edf3;
+    --muted: #8b949e;
+    --accent: #2f81f7;
+    --good: #3fb950;
+    --bad: #f85149;
+    --star: #f1c40f;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 14px;
+  }
+  header {
+    padding: 24px 32px 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  h1 {
+    margin: 0 0 4px;
+    font-size: 22px;
+    font-weight: 600;
+  }
+  .meta {
+    color: var(--muted);
+    font-size: 13px;
+  }
+  .controls {
+    display: flex;
+    gap: 12px;
+    padding: 16px 32px;
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  input[type="text"], select {
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 6px 10px;
+    border-radius: 6px;
+    font-size: 13px;
+    outline: none;
+  }
+  input[type="text"]:focus, select:focus { border-color: var(--accent); }
+  input[type="text"] { min-width: 220px; }
+  label.chk {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--muted);
+    cursor: pointer;
+    user-select: none;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 0;
+  }
+  th, td {
+    padding: 10px 12px;
+    text-align: right;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  th:first-child, td:first-child, th:nth-child(2), td:nth-child(2) { text-align: left; }
+  th {
+    background: var(--panel);
+    font-weight: 600;
+    color: var(--muted);
+    position: sticky;
+    top: 0;
+    cursor: pointer;
+    user-select: none;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  th:hover { color: var(--text); }
+  th.sorted::after { content: ' ↓'; color: var(--accent); }
+  th.sorted.asc::after { content: ' ↑'; color: var(--accent); }
+  tbody tr { background: var(--bg); }
+  tbody tr:hover { background: var(--panel-2); }
+  tbody tr.expanded { background: var(--panel-2); }
+  tbody tr.detail { background: var(--panel); }
+  tbody tr.detail td {
+    padding: 16px 32px;
+    border-bottom: 1px solid var(--border);
+  }
+  .addr {
+    font-family: ui-monospace, 'SF Mono', monospace;
+    font-size: 12px;
+    color: var(--accent);
+    text-decoration: none;
+  }
+  .addr:hover { text-decoration: underline; }
+  .stars { color: var(--star); letter-spacing: 1px; }
+  .stars-empty { color: #30363d; letter-spacing: 1px; }
+  .good { color: var(--good); }
+  .bad { color: var(--bad); }
+  .muted { color: var(--muted); }
+  .pill {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+  }
+  .score-cell {
+    font-weight: 600;
+    font-size: 15px;
+  }
+  .sparkline {
+    display: inline-block;
+    vertical-align: middle;
+  }
+  .detail-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 12px;
+  }
+  .kv {
+    background: var(--panel-2);
+    padding: 10px 12px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+  }
+  .kv .k { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .kv .v { font-size: 15px; margin-top: 2px; font-family: ui-monospace, 'SF Mono', monospace; }
+  footer {
+    padding: 16px 32px;
+    color: var(--muted);
+    font-size: 12px;
+    border-top: 1px solid var(--border);
+  }
+  .expander {
+    cursor: pointer;
+    color: var(--muted);
+    user-select: none;
+  }
+  .empty {
+    padding: 60px 32px;
+    text-align: center;
+    color: var(--muted);
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Polymarket Smart Money 排行榜</h1>
+  <div class="meta" id="meta">加载中…</div>
+</header>
+
+<div class="controls">
+  <input type="text" id="search" placeholder="搜地址、名字…" />
+  <select id="filter-stars">
+    <option value="0">所有星级</option>
+    <option value="5">仅 ★★★★★</option>
+    <option value="4">≥ ★★★★</option>
+    <option value="3">≥ ★★★</option>
+  </select>
+  <label class="chk">
+    <input type="checkbox" id="hide-low-conf" /> 隐藏低可信度（trades&lt;20）
+  </label>
+  <label class="chk">
+    <input type="checkbox" id="show-followability" checked /> 显示 Followability
+  </label>
+  <span style="flex: 1"></span>
+  <span class="meta" id="count"></span>
+</div>
+
+<table id="board">
+  <thead>
+    <tr>
+      <th data-sort="rank">#</th>
+      <th data-sort="wallet">钱包</th>
+      <th data-sort="stars">星</th>
+      <th class="sorted" data-sort="score">总分</th>
+      <th data-sort="roi">ROI</th>
+      <th data-sort="sharpe">Sharpe</th>
+      <th data-sort="max_dd">MaxDD</th>
+      <th data-sort="avg_hold_secs">AvgHold</th>
+      <th data-sort="early_entry">Early</th>
+      <th data-sort="trades">Trades</th>
+      <th data-sort="notional">Volume</th>
+      <th data-sort="followability" class="col-followability">Followability</th>
+      <th>7d</th>
+    </tr>
+  </thead>
+  <tbody id="tbody"></tbody>
+</table>
+
+<footer>
+  <strong>评分</strong> = 40% ROI + 20% Sharpe + 15% MaxDD + 15% AvgHold + 10% Early Entry，乘 Confidence(trades)，加 Market Impact bonus。
+  <strong>Followability</strong> = 50% Followable ROI(60s 延迟) + 20% (1-Slippage) + 15% Liquidity + 15% AvgHold。
+  分钟级精度；archiver 跑够 2-4 周后可升级到秒级。
+  <br>数据源：Polymarket Data API + Gamma API + CLOB。
+</footer>
+
+<script>
+const STAR_CHAR = '★';
+const EMPTY_STAR = '☆';
+let DATA = null;
+let SORT = { key: 'score', dir: 'desc' };
+
+function fmtPct(x, places = 1) {
+  if (x === null || x === undefined) return '—';
+  const sign = x > 0 ? '+' : '';
+  return `${sign}${(x * 100).toFixed(places)}%`;
+}
+function fmtNum(x, places = 2) {
+  if (x === null || x === undefined) return '—';
+  return Number(x).toFixed(places);
+}
+function fmtHold(secs) {
+  if (!secs) return '—';
+  const d = secs / 86400;
+  if (d >= 1) return `${d.toFixed(1)}d`;
+  const h = secs / 3600;
+  if (h >= 1) return `${h.toFixed(1)}h`;
+  return `${Math.round(secs / 60)}m`;
+}
+function fmtUSD(x) {
+  if (!x) return '—';
+  if (x >= 1e6) return `$${(x / 1e6).toFixed(1)}M`;
+  if (x >= 1e3) return `$${(x / 1e3).toFixed(1)}k`;
+  return `$${Math.round(x)}`;
+}
+function shortAddr(a) {
+  return `${a.slice(0, 6)}…${a.slice(-4)}`;
+}
+function classed(x, goodPositive = true) {
+  if (x === null || x === undefined) return 'muted';
+  if (goodPositive) return x > 0 ? 'good' : (x < 0 ? 'bad' : '');
+  return x > 0 ? 'bad' : (x < 0 ? 'good' : '');
+}
+function starHtml(n) {
+  return `<span class="stars">${STAR_CHAR.repeat(n)}</span><span class="stars-empty">${EMPTY_STAR.repeat(5 - n)}</span>`;
+}
+function sparkline(history) {
+  if (!history || history.length < 2) return '';
+  const w = 60, h = 18;
+  const xs = history.map((p, i) => i / (history.length - 1) * w);
+  const ys_raw = history.map(p => p.s);
+  const min = Math.min(...ys_raw);
+  const max = Math.max(...ys_raw);
+  const span = Math.max(max - min, 1);
+  const ys = ys_raw.map(v => h - ((v - min) / span) * h);
+  const path = xs.map((x, i) => `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${ys[i].toFixed(1)}`).join(' ');
+  const trend = ys_raw[ys_raw.length - 1] >= ys_raw[0] ? '#3fb950' : '#f85149';
+  return `<svg class="sparkline" width="${w}" height="${h}"><path d="${path}" stroke="${trend}" stroke-width="1.5" fill="none"/></svg>`;
+}
+
+function applyFilters(rows) {
+  const q = document.getElementById('search').value.trim().toLowerCase();
+  const minStars = parseInt(document.getElementById('filter-stars').value, 10);
+  const hideLowConf = document.getElementById('hide-low-conf').checked;
+  return rows.filter(r => {
+    if (q && !r.wallet.toLowerCase().includes(q) && !(r.name && r.name.toLowerCase().includes(q))) return false;
+    if (minStars === 5 && r.stars !== 5) return false;
+    if (minStars > 0 && minStars < 5 && r.stars < minStars) return false;
+    if (hideLowConf && r.trades < 20) return false;
+    return true;
+  });
+}
+
+function sortRows(rows) {
+  const { key, dir } = SORT;
+  const sign = dir === 'desc' ? -1 : 1;
+  return [...rows].sort((a, b) => {
+    const av = a[key], bv = b[key];
+    if (av === null || av === undefined) return 1;
+    if (bv === null || bv === undefined) return -1;
+    if (typeof av === 'string') return sign * av.localeCompare(bv);
+    return sign * (av - bv);
+  });
+}
+
+function renderRow(r, idx) {
+  const polyUrl = `https://polymarketanalytics.com/wallet/${r.wallet}`;
+  return `
+  <tr data-wallet="${r.wallet}" class="row">
+    <td class="muted">${idx + 1}</td>
+    <td>
+      <span class="expander" data-wallet="${r.wallet}">▸</span>
+      <a class="addr" href="${polyUrl}" target="_blank" rel="noopener">${shortAddr(r.wallet)}</a>
+      ${r.name ? `<span class="muted"> ${r.name}</span>` : ''}
+    </td>
+    <td>${starHtml(r.stars)}</td>
+    <td class="score-cell">${fmtNum(r.score, 1)}</td>
+    <td class="${classed(r.roi)}">${fmtPct(r.roi)}</td>
+    <td>${fmtNum(r.sharpe)}</td>
+    <td class="${r.max_dd !== null && r.max_dd > 0 ? 'bad' : 'muted'}">${r.max_dd !== null ? '-' + (r.max_dd * 100).toFixed(1) + '%' : '—'}</td>
+    <td>${fmtHold(r.avg_hold_secs)}</td>
+    <td>${r.early_entry !== null ? (r.early_entry * 100).toFixed(0) + '%' : '—'}</td>
+    <td>${r.trades}${r.trades < 20 ? ' <span class="pill">low</span>' : ''}</td>
+    <td class="muted">${fmtUSD(r.notional)}</td>
+    <td class="col-followability">${r.followability !== null ? fmtNum(r.followability, 0) : '—'}</td>
+    <td>${sparkline(r.history)}</td>
+  </tr>`;
+}
+
+function renderDetail(r) {
+  const cells = [
+    ['Followable ROI 60s', fmtPct(r.followable_roi_1m)],
+    ['Followable ROI 5m', fmtPct(r.followable_roi_5m)],
+    ['Followable ROI 15m', fmtPct(r.followable_roi_15m)],
+    ['滑点', r.slippage !== null ? (r.slippage * 100).toFixed(2) + '%' : '—'],
+    ['平均流动性', fmtUSD(r.liquidity)],
+    ['Market Impact bonus', fmtNum(r.market_impact_bonus, 1)],
+    ['Confidence 倍数', fmtNum(r.confidence, 2)],
+    ['累计成交额', fmtUSD(r.notional)],
+  ];
+  return `
+  <tr class="detail" data-wallet="${r.wallet}">
+    <td colspan="13">
+      <div class="detail-grid">
+        ${cells.map(([k, v]) => `<div class="kv"><div class="k">${k}</div><div class="v">${v}</div></div>`).join('')}
+      </div>
+    </td>
+  </tr>`;
+}
+
+function render() {
+  if (!DATA) return;
+  const filtered = applyFilters(DATA.rows);
+  const sorted = sortRows(filtered);
+  const tbody = document.getElementById('tbody');
+  if (sorted.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="13" class="empty">没有符合条件的钱包</td></tr>';
+  } else {
+    tbody.innerHTML = sorted.map(renderRow).join('');
+  }
+  document.getElementById('count').textContent = `${sorted.length} / ${DATA.rows.length}`;
+
+  // Sort header highlight
+  document.querySelectorAll('th[data-sort]').forEach(th => {
+    th.classList.remove('sorted', 'asc');
+    if (th.dataset.sort === SORT.key) {
+      th.classList.add('sorted');
+      if (SORT.dir === 'asc') th.classList.add('asc');
+    }
+  });
+
+  // Followability column visibility
+  const showFol = document.getElementById('show-followability').checked;
+  document.querySelectorAll('.col-followability').forEach(el => el.style.display = showFol ? '' : 'none');
+}
+
+function init() {
+  fetch('leaderboard.json?_=' + Date.now())
+    .then(r => r.json())
+    .then(data => {
+      DATA = data;
+      const gen = new Date(data.generated_ts * 1000);
+      document.getElementById('meta').innerHTML =
+        `${data.as_of} · 已评分 <strong>${data.total_scored}</strong> 个钱包 / ` +
+        `共追踪 ${data.total_wallets} 个 · ${data.total_trades.toLocaleString()} 笔交易 · ` +
+        `生成于 ${gen.toLocaleString('zh-CN')}`;
+      render();
+    })
+    .catch(e => {
+      document.getElementById('meta').textContent = '加载 leaderboard.json 失败：' + e.message;
+    });
+
+  document.querySelectorAll('th[data-sort]').forEach(th => {
+    th.addEventListener('click', () => {
+      const k = th.dataset.sort;
+      if (SORT.key === k) {
+        SORT.dir = SORT.dir === 'desc' ? 'asc' : 'desc';
+      } else {
+        SORT.key = k;
+        SORT.dir = 'desc';
+      }
+      render();
+    });
+  });
+
+  document.getElementById('search').addEventListener('input', render);
+  document.getElementById('filter-stars').addEventListener('change', render);
+  document.getElementById('hide-low-conf').addEventListener('change', render);
+  document.getElementById('show-followability').addEventListener('change', render);
+
+  // Row expand
+  document.getElementById('tbody').addEventListener('click', e => {
+    const target = e.target.closest('.expander');
+    if (!target) return;
+    const wallet = target.dataset.wallet;
+    const row = target.closest('tr');
+    const next = row.nextElementSibling;
+    if (next && next.classList.contains('detail') && next.dataset.wallet === wallet) {
+      next.remove();
+      row.classList.remove('expanded');
+      target.textContent = '▸';
+    } else {
+      const r = DATA.rows.find(x => x.wallet === wallet);
+      if (!r) return;
+      row.insertAdjacentHTML('afterend', renderDetail(r));
+      row.classList.add('expanded');
+      target.textContent = '▾';
+    }
+  });
+}
+
+init();
+</script>
+</body>
+</html>

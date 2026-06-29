@@ -1,0 +1,13 @@
+Metadata-Version: 2.4
+Name: smartmoney
+Version: 0.1.0
+Summary: Polymarket smart-money wallet scorer for PolyCop follow-trading
+Requires-Python: >=3.11
+Requires-Dist: httpx>=0.27
+Requires-Dist: websockets>=12
+Requires-Dist: pandas>=2.2
+Requires-Dist: numpy>=1.26
+Requires-Dist: pydantic>=2.6
+Requires-Dist: jinja2>=3.1
+Requires-Dist: click>=8.1
+Requires-Dist: tenacity>=8.2
